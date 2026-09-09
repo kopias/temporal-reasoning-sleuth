@@ -57,24 +57,22 @@ CREATE (mesh_adr)-[:INVOLVES]->(auth)
 
 ```cypher
 MATCH (target:Event {id: $target_id})
-CALL apoc.path.subgraphNodes(target, {
+CALL apoc.path.subgraphAll(target, {
   relationshipFilter: '<CAUSED|<TRIGGERED',
   maxLevel: $max_hops
-}) YIELD node AS ancestor
-RETURN ancestor
-ORDER BY ancestor.timestamp ASC
+}) YIELD nodes, relationships
+RETURN nodes AS ancestors, relationships AS causal_edges
 ```
 
 ### Pattern: Find all consequences of a given event
 
 ```cypher
 MATCH (source:Event {id: $source_id})
-CALL apoc.path.subgraphNodes(source, {
+CALL apoc.path.subgraphAll(source, {
   relationshipFilter: 'CAUSED>|TRIGGERED>',
   maxLevel: $max_hops
-}) YIELD node AS consequence
-RETURN consequence
-ORDER BY consequence.timestamp ASC
+}) YIELD nodes, relationships
+RETURN nodes AS consequences, relationships AS causal_edges
 ```
 
 ### Pattern: Timeline for a specific entity

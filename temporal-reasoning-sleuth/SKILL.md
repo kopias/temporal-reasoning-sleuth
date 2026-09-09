@@ -1,15 +1,13 @@
 ---
-name: temporal-reasoning-sleuth
+name: engineering-temporal-reasoning
 description: >
   Engineers temporal reasoning capabilities for AI agents — enabling them to
   trace decision chains, reconstruct causal sequences, and reason over event
   timelines spanning months or years of organizational history. Use when an
   agent must answer questions like "what decisions led to X", "how did this
   situation evolve", or when handling any query requiring temporal sequencing
-  and causation across multiple events. Common phrases: "reconstruct the causal
-  chain", "what led to this decision", "reason over our event timeline". This
-  is the read/query path — do NOT use for capturing or ingesting institutional
-  events or the storage schema (use synthesizing-institutional-knowledge).
+  and causation across multiple events.
+allowed-tools: []
 ---
 
 # Engineering Temporal Reasoning
@@ -23,27 +21,6 @@ LLMs have two temporal reasoning failure modes:
 **2. Context poisoning**: Events retrieved without their causal context contaminate reasoning. If you retrieve "auth service migrated to OAuth2" without "auth breach incident that caused it", the model may draw wrong conclusions about the migration's purpose.
 
 The fix is not bigger context windows — it is structured temporal storage and targeted retrieval that feeds the model a *curated causal slice*, not a raw timeline dump.
-
-```mermaid
-flowchart LR
-    subgraph wrong["Raw Timeline Dump (fails)"]
-        direction TB
-        E1[Event A] ~~~ E2[Event B] ~~~ E3[Event C] ~~~ E4[Event D] ~~~ E5[Event N...]
-    end
-
-    subgraph right["Curated Causal Slice (works)"]
-        direction LR
-        C1["Auth Breach\n2024-02-01"] -->|CAUSED| C2["Decision: OAuth2\n2024-03-15"]
-        C2 -->|TRIGGERED| C3["Implementation\n2024-04-10"]
-        C3 -->|CAUSED| C4["Mobile Update\n2024-05-20"]
-    end
-
-    wrong -->|"model gets lost"| FAIL([Attention\ndegrades])
-    right -->|"model follows chain"| WIN([Correct\ncausal reasoning])
-
-    style FAIL fill:#fee2e2,stroke:#ef4444
-    style WIN fill:#dcfce7,stroke:#22c55e
-```
 
 ---
 
@@ -67,13 +44,19 @@ flowchart LR
 - Model explains the chain
 
 **Retrieval**: Graph traversal from target node, backwards along causal edges
+
+Use `subgraphAll`, not `subgraphNodes`. `subgraphNodes` yields `node` and throws
+the relationships away, and without the edges you cannot tell which ancestor
+caused which. Sorting the bag of nodes by timestamp gives you chronology, and
+chronology is not causation: two unrelated branches interleave and read as a
+single chain. Rebuild the order from `relationships`, not from `timestamp`.
 ```
 MATCH (target:Event {id: 'evt_X'})
-CALL apoc.path.subgraphNodes(target, {
+CALL apoc.path.subgraphAll(target, {
   relationshipFilter: '<CAUSED',
   maxLevel: 4
-}) YIELD node
-RETURN node ORDER BY node.timestamp
+}) YIELD nodes, relationships
+RETURN nodes, relationships
 ```
 
 ---
@@ -124,23 +107,7 @@ Each `.chain.json` is a linearized representation of the causal subgraph, update
 
 ### Pattern 3: Windowed Context Synthesis
 
-For long-horizon queries, compress distant history to fit context. Feed the model a tiered window — not a full dump:
-
-```mermaid
-gantt
-    title Windowed Context Synthesis (query date = today)
-    dateFormat YYYY-MM-DD
-    axisFormat %b %Y
-
-    section Distant  >180 days
-    Compressed summary (model-summarized)     :done, 2023-01-01, 2023-07-01
-
-    section Recent  30–180 days
-    Structured event nodes (full schema)      :active, 2023-07-01, 2024-01-01
-
-    section Immediate  <30 days
-    Full event detail (every field)           :crit, 2024-01-01, 2024-02-01
-```
+For long-horizon queries, compress distant history to fit context:
 
 ```python
 def build_temporal_context(events: list[Event], query_date: datetime) -> str:
