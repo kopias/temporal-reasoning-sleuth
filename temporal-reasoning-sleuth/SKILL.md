@@ -1,5 +1,5 @@
 ---
-name: engineering-temporal-reasoning
+name: temporal-reasoning-sleuth
 description: >
   Engineers temporal reasoning capabilities for AI agents — enabling them to
   trace decision chains, reconstruct causal sequences, and reason over event
